@@ -1,0 +1,72 @@
+:root {
+  --bg-top: #0f131d;
+  --bg-mid: #090c12;
+  --bg-bottom: #05070b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: #eff6fb;
+  font: 18px/1.45 Georgia, 'Times New Roman', serif;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(120, 208, 255, 0.14), transparent 18%),
+    radial-gradient(circle at 50% 0, rgba(61, 101, 145, 0.14), transparent 26%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 48%, var(--bg-bottom) 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(166, 221, 255, 0.024), rgba(0, 0, 0, 0)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.01) 0,
+      rgba(255, 255, 255, 0.01) 1px,
+      transparent 1px,
+      transparent 140px
+    );
+  mix-blend-mode: screen;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 0, rgba(139, 223, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.08) 60%, rgba(0, 0, 0, 0.26) 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+code {
+  margin-left: 6px;
+  padding: 3px 8px;
+  border: 1px solid rgba(102, 145, 173, 0.45);
+  background: rgba(7, 12, 21, 0.58);
+  color: #d5efff;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+}
