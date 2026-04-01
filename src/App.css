@@ -353,6 +353,10 @@
   background: rgba(49, 9, 16, 0.74);
 }
 
+.compact-result {
+  min-height: 120px;
+}
+
 @media (max-width: 920px) {
   .banner-panel {
     grid-template-columns: 1fr;
@@ -434,6 +438,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
+  margin-bottom: 26px;
 }
 
 .gallery-card {
@@ -485,6 +490,144 @@
   color: #d7f2ff;
 }
 
+.danger-link {
+  color: #f0a6ab;
+}
+
+.danger-link:hover {
+  color: #ffd4d7;
+}
+
+.divider-line {
+  position: relative;
+  margin: 18px 0;
+  text-align: center;
+}
+
+.divider-line::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid rgba(98, 141, 172, 0.34);
+}
+
+.divider-line span {
+  position: relative;
+  display: inline-block;
+  padding: 0 10px;
+  background: rgba(12, 16, 24, 0.98);
+  color: #7fb9dc;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.76rem;
+}
+
+.secondary-action {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(98, 141, 172, 0.5);
+  background: linear-gradient(180deg, rgba(16, 22, 34, 0.96), rgba(8, 12, 19, 0.98));
+  color: #dff3ff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(34, 43, 59, 0.92);
+}
+
+.secondary-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.secondary-action:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.vault-shell {
+  padding: 22px;
+  border: 1px solid rgba(98, 141, 172, 0.42);
+  background: linear-gradient(180deg, rgba(9, 14, 23, 0.94), rgba(6, 9, 15, 0.98));
+  box-shadow: inset 0 0 0 1px rgba(31, 40, 55, 0.9);
+}
+
+.vault-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.vault-heading h3 {
+  margin: 0;
+  color: #eef9ff;
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.vault-badge {
+  padding: 8px 12px;
+  border: 1px solid rgba(98, 141, 172, 0.4);
+  background: rgba(18, 23, 34, 0.96);
+  color: #9bb8ca;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.76rem;
+}
+
+.vault-badge.online {
+  border-color: rgba(119, 212, 170, 0.44);
+  color: #caf5e2;
+}
+
+.vault-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.passkey-list {
+  display: grid;
+  gap: 14px;
+}
+
+.passkey-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid rgba(98, 141, 172, 0.32);
+  background: rgba(12, 16, 24, 0.88);
+}
+
+.passkey-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.passkey-copy strong {
+  color: #eef9ff;
+}
+
+.passkey-copy span {
+  color: #9ec2d8;
+  word-break: break-word;
+}
+
+.empty-vault {
+  padding: 18px;
+  border: 1px dashed rgba(98, 141, 172, 0.38);
+  color: #9db8c9;
+  background: rgba(8, 12, 18, 0.72);
+}
+
 @media (max-width: 920px) {
   .banner-actions {
     position: static;
@@ -502,5 +645,10 @@
 
   .gallery-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vault-heading,
+  .passkey-card {
+    flex-direction: column;
   }
 }
