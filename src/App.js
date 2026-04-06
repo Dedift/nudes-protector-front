@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
+const defaultApiBaseUrl = window.location.origin === 'http://localhost:3000'
+  ? 'http://localhost:8081'
+  : ''
+const apiBaseUrl = (process.env.REACT_APP_API_BASE_URL || defaultApiBaseUrl).trim().replace(/\/$/, '')
+const passwordPattern = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
+
 const initialRegister = {
   username: '',
   email: '',
   password: '',
+  mfaEnabled: false,
 }
 
 const initialLogin = {
   email: '',
   password: '',
+  rememberMe: false,
 }
 
 const initialVerification = {
@@ -17,33 +25,59 @@ const initialVerification = {
   code: '',
 }
 
+const initialMfaVerification = {
+  email: '',
+  code: '',
+}
+
+const initialOttRequest = {
+  email: '',
+}
+
+const initialOttVerification = {
+  token: '',
+}
+
 const query = new URLSearchParams(window.location.search)
-const initialScreen = query.get('screen') || 'gallery'
+const initialScreen = resolveInitialScreen(query)
 
 function App() {
   const [screen, setScreen] = useState(initialScreen)
   const [registerForm, setRegisterForm] = useState(initialRegister)
   const [loginForm, setLoginForm] = useState(initialLogin)
   const [verificationForm, setVerificationForm] = useState(initialVerification)
+  const [mfaForm, setMfaForm] = useState(initialMfaVerification)
+  const [ottRequestForm, setOttRequestForm] = useState(initialOttRequest)
+  const [ottForm, setOttForm] = useState(initialOttVerification)
   const [registerState, setRegisterState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
   const [loginState, setLoginState] = useState(getInitialLoginState())
   const [verificationState, setVerificationState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
+  const [mfaState, setMfaState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
+  const [ottRequestState, setOttRequestState] = useState({ loading: false, result: 'Passwordless channel is idle.', tone: '' })
+  const [ottState, setOttState] = useState({ loading: false, result: 'Awaiting one-time token...', tone: '' })
   const [sessionState, setSessionState] = useState({ loading: true, authenticated: false })
   const [passkeyState, setPasskeyState] = useState({ loading: false, result: 'Passkey vault is idle.', tone: '' })
   const [passkeys, setPasskeys] = useState([])
+  const [csrfState, setCsrfState] = useState({ headerName: '', parameterName: '', token: '' })
 
   useEffect(() => {
-    refreshSession()
+    bootstrap()
   }, [])
+
+  useEffect(() => {
+    syncScreenQuery(screen)
+  }, [screen])
 
   async function submit(path, payload, setter, onSuccess) {
     setter({ loading: true, result: 'Dispatching request to the citadel...', tone: '' })
 
     try {
-      const response = await fetch(path, {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch(path, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
         },
         body: JSON.stringify(payload),
       })
@@ -77,17 +111,57 @@ function App() {
     }
   }
 
+  async function bootstrap() {
+    try {
+      await fetchCsrfToken()
+      await refreshSession()
+    } catch (error) {
+      setPasskeys([])
+      setSessionState({ loading: false, authenticated: false })
+      setLoginState((current) => current.tone
+        ? current
+        : {
+            loading: false,
+            result: error instanceof Error ? error.message : 'Backend is unavailable.',
+            tone: 'error',
+          })
+    }
+  }
+
+  async function fetchCsrfToken() {
+    const response = await apiFetch('/csrf')
+    const body = await readResponseBody(response)
+
+    if (!response.ok) {
+      throw new Error(formatResult(body, response.status))
+    }
+
+    setCsrfState(body)
+    return body
+  }
+
+  async function ensureCsrfToken() {
+    if (csrfState.token) {
+      return csrfState
+    }
+    return fetchCsrfToken()
+  }
+
+  function csrfHeaders(csrf) {
+    return csrf?.token
+      ? { [csrf.headerName]: csrf.token }
+      : {}
+  }
+
   async function refreshSession() {
     setSessionState((current) => ({ ...current, loading: true }))
 
     try {
-      const response = await fetch('/users/me/passkeys', {
-        credentials: 'same-origin',
-      })
+      const response = await apiFetch('/users/me/passkeys')
 
       if (response.ok) {
-        const body = await response.json()
-        setPasskeys(body)
+        const body = await readResponseBody(response)
+        setPasskeys(Array.isArray(body) ? body : [])
         setSessionState({ loading: false, authenticated: true })
         return true
       }
@@ -110,9 +184,7 @@ function App() {
     setPasskeyState({ loading: true, result: 'Inspecting registered passkeys...', tone: '' })
 
     try {
-      const response = await fetch('/users/me/passkeys', {
-        credentials: 'same-origin',
-      })
+      const response = await apiFetch('/users/me/passkeys')
       const body = await readResponseBody(response)
 
       if (!response.ok) {
@@ -127,11 +199,11 @@ function App() {
         return
       }
 
-      setPasskeys(body)
+      setPasskeys(Array.isArray(body) ? body : [])
       setSessionState({ loading: false, authenticated: true })
       setPasskeyState({
         loading: false,
-        result: body.length === 0
+        result: (Array.isArray(body) ? body.length : 0) === 0
           ? 'No passkeys linked yet.'
           : `Loaded ${body.length} passkey${body.length === 1 ? '' : 's'}.`,
         tone: 'success',
@@ -147,23 +219,230 @@ function App() {
 
   async function handleRegisterSubmit(event) {
     event.preventDefault()
-    submit('/users/register', registerForm, setRegisterState, () => {
-      setVerificationForm({ email: registerForm.email, code: '' })
-      setLoginForm((current) => ({ ...current, email: registerForm.email }))
+    const payload = {
+      username: registerForm.username.trim(),
+      email: normalizeEmail(registerForm.email),
+      password: registerForm.password,
+      mfaEnabled: registerForm.mfaEnabled,
+    }
+
+    submit('/users/register', payload, setRegisterState, () => {
+      setVerificationForm({ email: payload.email, code: '' })
+      setLoginForm((current) => ({ ...current, email: payload.email }))
+      setOttRequestForm({ email: payload.email })
       setScreen('verify')
     })
   }
 
-  function handleLoginSubmit() {
-    setLoginState({ loading: true, result: 'Passing control to Spring Security...', tone: '' })
+  async function handleLoginSubmit(event) {
+    event.preventDefault()
+    setLoginState({ loading: true, result: 'Verifying credentials...', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const payload = {
+        email: normalizeEmail(loginForm.email),
+        password: loginForm.password,
+        rememberMe: loginForm.rememberMe,
+      }
+      const response = await apiFetch('/users/mfa/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
+        },
+        body: JSON.stringify(payload),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setLoginState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      if (body.otpRequired) {
+        setMfaForm({ email: payload.email, code: '' })
+        setScreen('mfa')
+        setLoginState({
+          loading: false,
+          result: body.message || 'OTP sent to email.',
+          tone: 'success',
+        })
+        return
+      }
+
+      await fetchCsrfToken()
+      await refreshSession()
+      setScreen('gallery')
+      setLoginState({
+        loading: false,
+        result: body.message || 'Authenticated successfully.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setLoginState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'Unexpected network error',
+        tone: 'error',
+      })
+    }
   }
 
   async function handleVerificationSubmit(event) {
     event.preventDefault()
-    submit('/users/verify-email', verificationForm, setVerificationState, () => {
+    const payload = {
+      email: normalizeEmail(verificationForm.email),
+      code: normalizeCode(verificationForm.code),
+    }
+
+    submit('/users/verify-email', payload, setVerificationState, () => {
       setScreen('login')
-      setLoginForm((current) => ({ ...current, email: verificationForm.email }))
+      setLoginForm((current) => ({ ...current, email: payload.email }))
     })
+  }
+
+  async function handleOttRequestSubmit(event) {
+    event.preventDefault()
+    setOttRequestState({ loading: true, result: 'Dispatching one-time login token...', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const email = normalizeEmail(ottRequestForm.email)
+      const payload = new URLSearchParams({ username: email })
+      const response = await apiFetch('/ott/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          ...csrfHeaders(csrf),
+        },
+        body: payload.toString(),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setOttRequestState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      setLoginForm((current) => ({ ...current, email }))
+      setOttRequestState({
+        loading: false,
+        result: formatResult(body, response.status),
+        tone: 'success',
+      })
+    } catch (error) {
+      setOttRequestState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'One-time token request failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleOttSubmit(event) {
+    event.preventDefault()
+    setOttState({ loading: true, result: 'Verifying one-time token...', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const payload = new URLSearchParams({ token: ottForm.token.trim() })
+      const response = await apiFetch('/login/ott', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          ...csrfHeaders(csrf),
+        },
+        body: payload.toString(),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setOttState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      await fetchCsrfToken()
+      await refreshSession()
+      setScreen('gallery')
+      setOttState({
+        loading: false,
+        result: body ? formatResult(body, response.status) : 'One-time token accepted.',
+        tone: 'success',
+      })
+      setLoginState({
+        loading: false,
+        result: 'Authenticated with one-time token.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setOttState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'One-time token verification failed',
+        tone: 'error',
+      })
+    }
+  }
+
+  function handleOAuthLogin(provider) {
+    window.location.assign(toApiUrl(`/oauth2/authorization/${provider}`))
+  }
+
+  async function handleMfaSubmit(event) {
+    event.preventDefault()
+    setMfaState({ loading: true, result: 'Verifying one-time code...', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const payload = {
+        email: normalizeEmail(mfaForm.email),
+        code: normalizeCode(mfaForm.code),
+      }
+      const response = await apiFetch('/users/mfa/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
+        },
+        body: JSON.stringify(payload),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setMfaState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      await fetchCsrfToken()
+      await refreshSession()
+      setScreen('gallery')
+      setMfaState({
+        loading: false,
+        result: body.message || 'Authenticated successfully.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setMfaState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'OTP verification failed',
+        tone: 'error',
+      })
+    }
   }
 
   async function handlePasskeyLogin() {
@@ -179,9 +458,10 @@ function App() {
     setLoginState({ loading: true, result: 'Requesting WebAuthn challenge...', tone: '' })
 
     try {
-      const optionsResponse = await fetch('/webauthn/authenticate/options', {
+      const csrf = await ensureCsrfToken()
+      const optionsResponse = await apiFetch('/webauthn/authenticate/options', {
         method: 'POST',
-        credentials: 'same-origin',
+        headers: csrfHeaders(csrf),
       })
       const optionsBody = await readResponseBody(optionsResponse)
 
@@ -207,11 +487,11 @@ function App() {
         return
       }
 
-      const authenticationResponse = await fetch('/login/webauthn', {
+      const authenticationResponse = await apiFetch('/login/webauthn', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
         },
         body: JSON.stringify(serializeAuthenticationCredential(credential)),
       })
@@ -226,6 +506,7 @@ function App() {
         return
       }
 
+      await fetchCsrfToken()
       await refreshSession()
       setScreen('gallery')
       setLoginState({
@@ -260,9 +541,10 @@ function App() {
     setPasskeyState({ loading: true, result: 'Preparing passkey registration ceremony...', tone: '' })
 
     try {
-      const optionsResponse = await fetch('/webauthn/register/options', {
+      const csrf = await ensureCsrfToken()
+      const optionsResponse = await apiFetch('/webauthn/register/options', {
         method: 'POST',
-        credentials: 'same-origin',
+        headers: csrfHeaders(csrf),
       })
       const optionsBody = await readResponseBody(optionsResponse)
 
@@ -292,11 +574,11 @@ function App() {
         return
       }
 
-      const registerResponse = await fetch('/webauthn/register', {
+      const registerResponse = await apiFetch('/webauthn/register', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
         },
         body: JSON.stringify({
           publicKey: {
@@ -335,9 +617,10 @@ function App() {
     setPasskeyState({ loading: true, result: 'Removing passkey from vault...', tone: '' })
 
     try {
-      const response = await fetch(`/users/me/passkeys/${encodeURIComponent(credentialId)}`, {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch(`/users/me/passkeys/${encodeURIComponent(credentialId)}`, {
         method: 'DELETE',
-        credentials: 'same-origin',
+        headers: csrfHeaders(csrf),
       })
 
       if (!response.ok) {
@@ -369,14 +652,26 @@ function App() {
     setPasskeyState({ loading: true, result: 'Closing current session...', tone: '' })
 
     try {
-      await fetch('/logout', {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch('/logout', {
         method: 'POST',
-        credentials: 'same-origin',
+        headers: csrfHeaders(csrf),
       })
+      if (!response.ok) {
+        const body = await readResponseBody(response)
+        throw new Error(formatResult(body, response.status))
+      }
+    } catch (_) {
+      // Backend logout can invalidate the session before the client refreshes its CSRF token.
     } finally {
+      try {
+        await fetchCsrfToken()
+      } catch (_) {
+        setCsrfState({ headerName: '', parameterName: '', token: '' })
+      }
       setPasskeys([])
       setSessionState({ loading: false, authenticated: false })
-      setScreen('login')
+      setScreen('gallery')
       setPasskeyState({
         loading: false,
         result: 'Session closed.',
@@ -419,16 +714,6 @@ function App() {
           <div className="banner-copy">
             <p className="overline">Nudes Protector</p>
             <h1>Gate of the Citadel</h1>
-            <p className="subtitle">Account Registry and Entry Hall</p>
-            <p className="lead">
-              Browse the protected wing from the main hall. Sign in with password or passkey, then manage linked authenticators from the vault.
-            </p>
-            <div className="status-strip">
-              <span className="status-glyph" aria-hidden="true">I</span>
-              <span>
-                Linked to <strong>gallery</strong>, <strong>login</strong>, <strong>register</strong>, <strong>verify email</strong> and <strong>passkeys</strong>
-              </span>
-            </div>
           </div>
         </section>
 
@@ -451,11 +736,6 @@ function App() {
                   </button>
                 )}
               </div>
-              <p className="panel-text">
-                {sessionState.authenticated
-                  ? 'Session confirmed. You can attach multiple passkeys, use them for future sign-in, and remove them individually.'
-                  : 'This is the main entry screen. After successful Spring Security login, the browser returns here and the gallery becomes the user landing point.'}
-              </p>
               <div className="gallery-grid" aria-label="Gallery preview">
                 {Array.from({ length: 10 }, (_, index) => (
                   <div key={index} className="gallery-card">
@@ -544,12 +824,11 @@ function App() {
               <h2>Login</h2>
               <p className="panel-text">Enter with your email and password, or use a registered passkey for passwordless entry.</p>
 
-              <form className="auth-form" method="post" action="/login" onSubmit={handleLoginSubmit}>
+              <form className="auth-form" onSubmit={handleLoginSubmit}>
                 <label>
                   <span>Email</span>
                   <input
                     type="email"
-                    name="username"
                     value={loginForm.email}
                     onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
                     placeholder="warden@citadel.com"
@@ -570,6 +849,15 @@ function App() {
                   />
                 </label>
 
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={loginForm.rememberMe}
+                    onChange={(event) => setLoginForm((current) => ({ ...current, rememberMe: event.target.checked }))}
+                  />
+                  <strong>Remember this browser</strong>
+                </label>
+
                 <button type="submit" disabled={loginState.loading}>
                   {loginState.loading ? 'Verifying...' : 'Enter the Hall'}
                 </button>
@@ -583,6 +871,61 @@ function App() {
                 {loginState.loading ? 'Awaiting ceremony...' : 'Enter with Passkey'}
               </button>
 
+              <div className="divider-line">
+                <span>oauth2</span>
+              </div>
+
+              <div className="panel-actions auth-provider-actions">
+                <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('google')} disabled={loginState.loading}>
+                  Continue with Google
+                </button>
+                <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('github')} disabled={loginState.loading}>
+                  Continue with GitHub
+                </button>
+              </div>
+
+              <div className="divider-line">
+                <span>one-time token</span>
+              </div>
+
+              <form className="auth-form" onSubmit={handleOttRequestSubmit}>
+                <label>
+                  <span>Email for OTT</span>
+                  <input
+                    type="email"
+                    value={ottRequestForm.email}
+                    onChange={(event) => setOttRequestForm({ email: event.target.value })}
+                    placeholder="warden@citadel.com"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={ottRequestState.loading}>
+                  {ottRequestState.loading ? 'Sending token...' : 'Send one-time token'}
+                </button>
+              </form>
+
+              <pre className={`result-box compact-result ${ottRequestState.tone}`}>{ottRequestState.result}</pre>
+
+              <form className="auth-form" onSubmit={handleOttSubmit}>
+                <label>
+                  <span>OTT token</span>
+                  <input
+                    type="text"
+                    value={ottForm.token}
+                    onChange={(event) => setOttForm({ token: event.target.value.trim() })}
+                    placeholder="Paste one-time token"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={ottState.loading}>
+                  {ottState.loading ? 'Checking token...' : 'Login with one-time token'}
+                </button>
+              </form>
+
+              <pre className={`result-box compact-result ${ottState.tone}`}>{ottState.result}</pre>
+
               <div className="panel-actions">
                 <button type="button" className="link-button" onClick={() => setScreen('register')}>
                   Register
@@ -593,6 +936,61 @@ function App() {
               </div>
 
               <pre className={`result-box ${loginState.tone}`}>{loginState.result}</pre>
+            </article>
+          )}
+
+          {screen === 'mfa' && (
+            <article className="command-panel single-panel command-panel-accent">
+              <div className="frame-ribs" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className="panel-label">Multi-factor check</p>
+              <h2>Enter login code</h2>
+              <p className="panel-text">Enter the 6-digit code sent after password verification.</p>
+
+              <form className="auth-form" onSubmit={handleMfaSubmit}>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={mfaForm.email}
+                    onChange={(event) => setMfaForm((current) => ({ ...current, email: event.target.value }))}
+                    placeholder="warden@citadel.com"
+                    required
+                  />
+                </label>
+
+                <label>
+                  <span>One-time code</span>
+                  <input
+                    type="text"
+                    value={mfaForm.code}
+                    onChange={(event) => setMfaForm((current) => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 6) }))}
+                    placeholder="123456"
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    maxLength="6"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={mfaState.loading}>
+                  {mfaState.loading ? 'Confirming...' : 'Complete Login'}
+                </button>
+              </form>
+
+              <div className="panel-actions">
+                <button type="button" className="link-button" onClick={() => setScreen('login')}>
+                  Back to login
+                </button>
+                <button type="button" className="link-button" onClick={() => setScreen('gallery')}>
+                  Back to gallery
+                </button>
+              </div>
+
+              <pre className={`result-box ${mfaState.tone}`}>{mfaState.result}</pre>
             </article>
           )}
 
@@ -640,7 +1038,18 @@ function App() {
                     onChange={(event) => setRegisterForm((current) => ({ ...current, password: event.target.value }))}
                     placeholder="StrongPass123!"
                     minLength="8"
+                    pattern={passwordPattern.source}
                     required
+                  />
+                  <p className="field-hint">Minimum 8 characters with letters, digits, and a special character.</p>
+                </label>
+
+                <label>
+                  <span>Enable email MFA</span>
+                  <input
+                    type="checkbox"
+                    checked={registerForm.mfaEnabled}
+                    onChange={(event) => setRegisterForm((current) => ({ ...current, mfaEnabled: event.target.checked }))}
                   />
                 </label>
 
@@ -725,15 +1134,35 @@ function App() {
 }
 
 async function readResponseBody(response) {
+  const text = await response.text()
+
+  if (!text) {
+    return null
+  }
+
   const contentType = response.headers.get('content-type') || ''
-  return contentType.includes('application/json')
-    ? response.json()
-    : response.text()
+  if (!contentType.includes('application/json')) {
+    return text
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch (_) {
+    return text
+  }
 }
 
 function formatResult(body, status) {
+  if (body == null) {
+    return `HTTP ${status}`
+  }
+
   if (typeof body === 'string') {
     return `HTTP ${status}\n${body}`
+  }
+
+  if (typeof body === 'object' && typeof body.message === 'string' && body.message.trim()) {
+    return body.message
   }
 
   return `HTTP ${status}\n${JSON.stringify(body, null, 2)}`
@@ -775,7 +1204,63 @@ function getInitialLoginState() {
     }
   }
 
+  if (error) {
+    return {
+      loading: false,
+      result: `Authentication failed: ${error}`,
+      tone: 'error',
+    }
+  }
+
   return { loading: false, result: 'Awaiting your command...', tone: '' }
+}
+
+function resolveInitialScreen(currentQuery) {
+  if (currentQuery.get('error') || currentQuery.get('logout')) {
+    return 'gallery'
+  }
+
+  return currentQuery.get('screen') || 'gallery'
+}
+
+function syncScreenQuery(screen) {
+  const next = new URLSearchParams(window.location.search)
+
+  next.delete('error')
+  next.delete('logout')
+
+  if (screen === 'gallery') {
+    next.delete('screen')
+  } else {
+    next.set('screen', screen)
+  }
+
+  const nextQuery = next.toString()
+  const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+  window.history.replaceState({}, '', nextUrl)
+}
+
+function apiFetch(path, init = {}) {
+  return fetch(toApiUrl(path), {
+    credentials: 'include',
+    ...init,
+  })
+}
+
+function toApiUrl(path) {
+  if (!apiBaseUrl) {
+    return path
+  }
+
+  return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+function normalizeEmail(value) {
+  return value.trim().toLowerCase()
+}
+
+function normalizeCode(value) {
+  return value.replace(/\D/g, '').slice(0, 6)
 }
 
 function decodeCreationOptions(options) {

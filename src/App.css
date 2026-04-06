@@ -299,6 +299,13 @@
     0 0 18px rgba(117, 205, 255, 0.14);
 }
 
+.field-hint {
+  margin: -2px 0 0;
+  color: #9bb8ca;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .auth-form button {
   margin-top: 8px;
   padding: 15px 18px;
@@ -545,6 +552,31 @@
 .secondary-action:disabled {
   opacity: 0.7;
   cursor: wait;
+}
+
+.checkbox-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkbox-row input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #7ecfff;
+}
+
+.checkbox-row strong {
+  color: #dff3ff;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.auth-provider-actions {
+  margin-top: 0;
 }
 
 .vault-shell {
