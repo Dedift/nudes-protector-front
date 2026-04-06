@@ -33,10 +33,6 @@ const initialOttRequest = {
   email: '',
 }
 
-const initialOttVerification = {
-  token: '',
-}
-
 const initialPasskeyForm = {
   label: '',
 }
@@ -51,13 +47,11 @@ function App() {
   const [verificationForm, setVerificationForm] = useState(initialVerification)
   const [mfaForm, setMfaForm] = useState(initialMfaVerification)
   const [ottRequestForm, setOttRequestForm] = useState(initialOttRequest)
-  const [ottForm, setOttForm] = useState(initialOttVerification)
   const [registerState, setRegisterState] = useState({ loading: false, result: '', tone: '' })
   const [loginState, setLoginState] = useState(getInitialLoginState())
   const [verificationState, setVerificationState] = useState({ loading: false, result: '', tone: '' })
   const [mfaState, setMfaState] = useState({ loading: false, result: '', tone: '' })
   const [ottRequestState, setOttRequestState] = useState({ loading: false, result: '', tone: '' })
-  const [ottState, setOttState] = useState({ loading: false, result: '', tone: '' })
   const [sessionState, setSessionState] = useState({ loading: true, authenticated: false })
   const [passkeyState, setPasskeyState] = useState({ loading: false, result: '', tone: '' })
   const [passkeys, setPasskeys] = useState([])
@@ -336,55 +330,11 @@ function App() {
         result: '',
         tone: '',
       })
-      setOttForm({ token: '' })
-      setScreen('ott-verify')
+      setScreen('ott-wait')
     } catch (error) {
       setOttRequestState({
         loading: false,
-        result: error instanceof Error ? error.message : 'One-time token request failed',
-        tone: 'error',
-      })
-    }
-  }
-
-  async function handleOttSubmit(event) {
-    event.preventDefault()
-    setOttState({ loading: true, result: '', tone: '' })
-
-    try {
-      const csrf = await ensureCsrfToken()
-      const payload = new URLSearchParams({ token: ottForm.token.trim() })
-      const response = await apiFetch('/login/ott', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          ...csrfHeaders(csrf),
-        },
-        body: payload.toString(),
-      })
-      const body = await readResponseBody(response)
-
-      if (!response.ok) {
-        setOttState({
-          loading: false,
-          result: formatResult(body, response.status),
-          tone: 'error',
-        })
-        return
-      }
-
-      await fetchCsrfToken()
-      await refreshSession()
-      setScreen('gallery')
-      setOttState({
-        loading: false,
-        result: '',
-        tone: '',
-      })
-    } catch (error) {
-      setOttState({
-        loading: false,
-        result: error instanceof Error ? error.message : 'One-time token verification failed',
+        result: error instanceof Error ? error.message : 'Magic link request failed',
         tone: 'error',
       })
     }
@@ -1011,9 +961,9 @@ function App() {
                 <span />
                 <span />
               </div>
-              <p className="panel-label">One-time token</p>
+              <p className="panel-label">Magic link</p>
               <h2>Login by Email</h2>
-              <p className="panel-text">Enter your email address. We will send a one-time login token to it.</p>
+              <p className="panel-text">Enter your email address. We will send a magic link to it.</p>
 
               <form className="auth-form" onSubmit={handleOttRequestSubmit}>
                 <label>
@@ -1028,7 +978,7 @@ function App() {
                 </label>
 
                 <button type="submit" disabled={ottRequestState.loading}>
-                  Send one-time token
+                  Send magic link
                 </button>
               </form>
 
@@ -1047,46 +997,25 @@ function App() {
             </article>
           )}
 
-          {screen === 'ott-verify' && (
+          {screen === 'ott-wait' && (
             <article className="command-panel single-panel command-panel-accent">
               <div className="frame-ribs" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
-              <p className="panel-label">One-time token</p>
-              <h2>Enter token</h2>
-              <p className="panel-text">Paste the one-time token from the email to complete sign-in.</p>
-
-              <form className="auth-form" onSubmit={handleOttSubmit}>
-                <label>
-                  <span>One-time token</span>
-                  <input
-                    type="text"
-                    value={ottForm.token}
-                    onChange={(event) => setOttForm({ token: event.target.value.trim() })}
-                    placeholder="Paste token"
-                    required
-                  />
-                </label>
-
-                <button type="submit" disabled={ottState.loading}>
-                  Login with one-time token
-                </button>
-              </form>
+              <p className="panel-label">Magic link</p>
+              <h2>Check your email</h2>
+              <p className="panel-text">Wait for the message and open the magic link to sign in.</p>
 
               <div className="panel-actions">
                 <button type="button" className="link-button" onClick={() => setScreen('ott-request')}>
-                  Back to email
+                  Change email
                 </button>
                 <button type="button" className="link-button" onClick={() => setScreen('login')}>
                   Back to login
                 </button>
               </div>
-
-              {ottState.tone === 'error' && ottState.result && (
-                <pre className={`result-box ${ottState.tone}`}>{ottState.result}</pre>
-              )}
             </article>
           )}
 
