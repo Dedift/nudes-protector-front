@@ -145,6 +145,51 @@
   align-self: center;
 }
 
+.login-citadel-mark {
+  display: flex;
+}
+
+.login-citadel-mark .frost-crown {
+  width: 72px;
+  height: 84px;
+}
+
+.login-citadel-mark .frost-crown-spike {
+  bottom: 12px;
+  width: 16px;
+}
+
+.login-citadel-mark .spike-a {
+  left: 3px;
+  height: 40px;
+}
+
+.login-citadel-mark .spike-b {
+  left: 18px;
+  height: 62px;
+}
+
+.login-citadel-mark .spike-c {
+  right: 18px;
+  height: 62px;
+}
+
+.login-citadel-mark .spike-d {
+  right: 3px;
+  height: 40px;
+}
+
+.login-citadel-mark .frost-core {
+  inset: 22px 18px 10px;
+}
+
+.login-citadel-mark-inline {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  opacity: 0.9;
+}
+
 .overline,
 .panel-label {
   margin: 0 0 10px;
@@ -302,8 +347,9 @@
 .field-hint {
   margin: -2px 0 0;
   color: #9bb8ca;
-  font-size: 0.78rem;
-  line-height: 1.5;
+  font-size: 0.96rem;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .auth-form button {
@@ -421,6 +467,10 @@
 .single-panel {
   max-width: 720px;
   margin: 0 auto;
+}
+
+.auth-screen-panel {
+  width: min(100%, 540px);
 }
 
 .panel-actions {
@@ -575,8 +625,73 @@
   text-transform: uppercase;
 }
 
+.auth-provider-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.auth-provider-row .nav-pill {
+  min-width: 0;
+  width: 100%;
+}
+
+.auth-provider-row-compact {
+  gap: 6px;
+}
+
+.auth-provider-row-compact .nav-pill {
+  padding: 8px 10px;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  min-width: 0;
+}
+
+.mini-auth-label {
+  margin: 2px 0 0;
+  color: #8fb9d5;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
 .auth-provider-actions {
   margin-top: 0;
+}
+
+.compact-auth-tools {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.compact-ott-shell {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(98, 141, 172, 0.32);
+  background: rgba(9, 14, 23, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(31, 40, 55, 0.72);
+}
+
+.compact-auth-form {
+  gap: 12px;
+}
+
+.compact-auth-form button {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .auth-provider-row {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-screen-panel {
+    min-height: 0;
+  }
 }
 
 .vault-shell {
@@ -620,7 +735,51 @@
 .vault-actions {
   display: flex;
   gap: 12px;
+  align-items: end;
   flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.passkey-name-field {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 260px;
+}
+
+.passkey-name-field span {
+  color: #88bde3;
+  font-size: 0.84rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.passkey-name-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid rgba(98, 135, 165, 0.64);
+  background: linear-gradient(180deg, rgba(28, 35, 50, 0.96), rgba(13, 17, 25, 0.98));
+  color: #eff7ff;
+  font: inherit;
+  box-shadow: inset 0 0 0 1px rgba(36, 49, 69, 0.9);
+}
+
+.passkey-name-field input:focus {
+  outline: none;
+  border-color: rgba(145, 224, 255, 0.92);
+  box-shadow:
+    0 0 0 3px rgba(118, 198, 255, 0.14),
+    inset 0 0 0 1px rgba(58, 84, 112, 0.92),
+    0 0 18px rgba(117, 205, 255, 0.14);
+}
+
+.vault-actions .nav-pill {
+  min-width: 0;
+  padding: 12px 16px;
+}
+
+.profile-settings {
+  display: grid;
+  gap: 12px;
   margin-bottom: 18px;
 }
 

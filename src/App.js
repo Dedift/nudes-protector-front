@@ -11,7 +11,6 @@ const initialRegister = {
   username: '',
   email: '',
   password: '',
-  mfaEnabled: false,
 }
 
 const initialLogin = {
@@ -38,6 +37,10 @@ const initialOttVerification = {
   token: '',
 }
 
+const initialPasskeyForm = {
+  label: '',
+}
+
 const query = new URLSearchParams(window.location.search)
 const initialScreen = resolveInitialScreen(query)
 
@@ -49,16 +52,18 @@ function App() {
   const [mfaForm, setMfaForm] = useState(initialMfaVerification)
   const [ottRequestForm, setOttRequestForm] = useState(initialOttRequest)
   const [ottForm, setOttForm] = useState(initialOttVerification)
-  const [registerState, setRegisterState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
+  const [registerState, setRegisterState] = useState({ loading: false, result: '', tone: '' })
   const [loginState, setLoginState] = useState(getInitialLoginState())
-  const [verificationState, setVerificationState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
-  const [mfaState, setMfaState] = useState({ loading: false, result: 'Awaiting your command...', tone: '' })
-  const [ottRequestState, setOttRequestState] = useState({ loading: false, result: 'Passwordless channel is idle.', tone: '' })
-  const [ottState, setOttState] = useState({ loading: false, result: 'Awaiting one-time token...', tone: '' })
+  const [verificationState, setVerificationState] = useState({ loading: false, result: '', tone: '' })
+  const [mfaState, setMfaState] = useState({ loading: false, result: '', tone: '' })
+  const [ottRequestState, setOttRequestState] = useState({ loading: false, result: '', tone: '' })
+  const [ottState, setOttState] = useState({ loading: false, result: '', tone: '' })
   const [sessionState, setSessionState] = useState({ loading: true, authenticated: false })
-  const [passkeyState, setPasskeyState] = useState({ loading: false, result: 'Passkey vault is idle.', tone: '' })
+  const [passkeyState, setPasskeyState] = useState({ loading: false, result: '', tone: '' })
   const [passkeys, setPasskeys] = useState([])
+  const [passkeyForm, setPasskeyForm] = useState(initialPasskeyForm)
   const [csrfState, setCsrfState] = useState({ headerName: '', parameterName: '', token: '' })
+  const [profileState, setProfileState] = useState({ loading: false, mfaEnabled: false, result: '', tone: '' })
 
   useEffect(() => {
     bootstrap()
@@ -69,7 +74,7 @@ function App() {
   }, [screen])
 
   async function submit(path, payload, setter, onSuccess) {
-    setter({ loading: true, result: 'Dispatching request to the citadel...', tone: '' })
+    setter({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -93,11 +98,7 @@ function App() {
         return
       }
 
-      setter({
-        loading: false,
-        result: formatResult(body, response.status),
-        tone: 'success',
-      })
+      setter({ loading: false, result: '', tone: '' })
 
       if (onSuccess) {
         onSuccess(body)
@@ -181,7 +182,7 @@ function App() {
   }
 
   async function loadPasskeys() {
-    setPasskeyState({ loading: true, result: 'Inspecting registered passkeys...', tone: '' })
+    setPasskeyState({ loading: true, result: '', tone: '' })
 
     try {
       const response = await apiFetch('/users/me/passkeys')
@@ -203,10 +204,8 @@ function App() {
       setSessionState({ loading: false, authenticated: true })
       setPasskeyState({
         loading: false,
-        result: (Array.isArray(body) ? body.length : 0) === 0
-          ? 'No passkeys linked yet.'
-          : `Loaded ${body.length} passkey${body.length === 1 ? '' : 's'}.`,
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setPasskeyState({
@@ -223,7 +222,6 @@ function App() {
       username: registerForm.username.trim(),
       email: normalizeEmail(registerForm.email),
       password: registerForm.password,
-      mfaEnabled: registerForm.mfaEnabled,
     }
 
     submit('/users/register', payload, setRegisterState, () => {
@@ -236,7 +234,7 @@ function App() {
 
   async function handleLoginSubmit(event) {
     event.preventDefault()
-    setLoginState({ loading: true, result: 'Verifying credentials...', tone: '' })
+    setLoginState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -269,8 +267,8 @@ function App() {
         setScreen('mfa')
         setLoginState({
           loading: false,
-          result: body.message || 'OTP sent to email.',
-          tone: 'success',
+          result: '',
+          tone: '',
         })
         return
       }
@@ -280,8 +278,8 @@ function App() {
       setScreen('gallery')
       setLoginState({
         loading: false,
-        result: body.message || 'Authenticated successfully.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setLoginState({
@@ -307,7 +305,7 @@ function App() {
 
   async function handleOttRequestSubmit(event) {
     event.preventDefault()
-    setOttRequestState({ loading: true, result: 'Dispatching one-time login token...', tone: '' })
+    setOttRequestState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -335,9 +333,11 @@ function App() {
       setLoginForm((current) => ({ ...current, email }))
       setOttRequestState({
         loading: false,
-        result: formatResult(body, response.status),
-        tone: 'success',
+        result: '',
+        tone: '',
       })
+      setOttForm({ token: '' })
+      setScreen('ott-verify')
     } catch (error) {
       setOttRequestState({
         loading: false,
@@ -349,7 +349,7 @@ function App() {
 
   async function handleOttSubmit(event) {
     event.preventDefault()
-    setOttState({ loading: true, result: 'Verifying one-time token...', tone: '' })
+    setOttState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -378,13 +378,8 @@ function App() {
       setScreen('gallery')
       setOttState({
         loading: false,
-        result: body ? formatResult(body, response.status) : 'One-time token accepted.',
-        tone: 'success',
-      })
-      setLoginState({
-        loading: false,
-        result: 'Authenticated with one-time token.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setOttState({
@@ -401,7 +396,7 @@ function App() {
 
   async function handleMfaSubmit(event) {
     event.preventDefault()
-    setMfaState({ loading: true, result: 'Verifying one-time code...', tone: '' })
+    setMfaState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -433,8 +428,8 @@ function App() {
       setScreen('gallery')
       setMfaState({
         loading: false,
-        result: body.message || 'Authenticated successfully.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setMfaState({
@@ -455,7 +450,7 @@ function App() {
       return
     }
 
-    setLoginState({ loading: true, result: 'Requesting WebAuthn challenge...', tone: '' })
+    setLoginState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -511,13 +506,8 @@ function App() {
       setScreen('gallery')
       setLoginState({
         loading: false,
-        result: 'Passkey accepted. The hall is open.',
-        tone: 'success',
-      })
-      setPasskeyState({
-        loading: false,
-        result: 'Passkey sign-in completed successfully.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setLoginState({
@@ -538,7 +528,7 @@ function App() {
       return
     }
 
-    setPasskeyState({ loading: true, result: 'Preparing passkey registration ceremony...', tone: '' })
+    setPasskeyState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -560,7 +550,7 @@ function App() {
         return
       }
 
-      const label = buildPasskeyLabel()
+      const label = buildPasskeyLabel(passkeyForm.label)
       const credential = await navigator.credentials.create({
         publicKey: decodeCreationOptions(optionsBody),
       })
@@ -599,10 +589,11 @@ function App() {
       }
 
       await loadPasskeys()
+      setPasskeyForm(initialPasskeyForm)
       setPasskeyState({
         loading: false,
-        result: `Passkey "${label}" linked successfully.`,
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setPasskeyState({
@@ -614,7 +605,7 @@ function App() {
   }
 
   async function handlePasskeyDelete(credentialId) {
-    setPasskeyState({ loading: true, result: 'Removing passkey from vault...', tone: '' })
+    setPasskeyState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -636,8 +627,8 @@ function App() {
       await loadPasskeys()
       setPasskeyState({
         loading: false,
-        result: 'Passkey removed.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     } catch (error) {
       setPasskeyState({
@@ -648,8 +639,85 @@ function App() {
     }
   }
 
+  async function loadProfileSettings() {
+    setProfileState((current) => ({ ...current, loading: true, result: '', tone: '' }))
+
+    try {
+      const response = await apiFetch('/users/me/settings')
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setProfileState({
+          loading: false,
+          mfaEnabled: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      setProfileState({
+        loading: false,
+        mfaEnabled: Boolean(body?.mfaEnabled),
+        result: '',
+        tone: '',
+      })
+    } catch (error) {
+      setProfileState({
+        loading: false,
+        mfaEnabled: false,
+        result: error instanceof Error ? error.message : 'Failed to load profile settings.',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleProfileMfaToggle(event) {
+    const enabled = event.target.checked
+    setProfileState((current) => ({ ...current, loading: true, mfaEnabled: enabled, result: '', tone: '' }))
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch('/users/me/settings/mfa', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
+        },
+        body: JSON.stringify({ enabled }),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setProfileState((current) => ({
+          ...current,
+          loading: false,
+          mfaEnabled: !enabled,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        }))
+        return
+      }
+
+      setProfileState({
+        loading: false,
+        mfaEnabled: Boolean(body?.mfaEnabled),
+        result: '',
+        tone: '',
+      })
+    } catch (error) {
+      setProfileState((current) => ({
+        ...current,
+        loading: false,
+        mfaEnabled: !enabled,
+        result: error instanceof Error ? error.message : 'Failed to update email MFA.',
+        tone: 'error',
+      }))
+    }
+  }
+
   async function handleLogout() {
-    setPasskeyState({ loading: true, result: 'Closing current session...', tone: '' })
+    setPasskeyState({ loading: true, result: '', tone: '' })
 
     try {
       const csrf = await ensureCsrfToken()
@@ -658,8 +726,7 @@ function App() {
         headers: csrfHeaders(csrf),
       })
       if (!response.ok) {
-        const body = await readResponseBody(response)
-        throw new Error(formatResult(body, response.status))
+        await readResponseBody(response)
       }
     } catch (_) {
       // Backend logout can invalidate the session before the client refreshes its CSRF token.
@@ -674,10 +741,16 @@ function App() {
       setScreen('gallery')
       setPasskeyState({
         loading: false,
-        result: 'Session closed.',
-        tone: 'success',
+        result: '',
+        tone: '',
       })
     }
+  }
+
+  function openProfile() {
+    setScreen('profile')
+    loadPasskeys()
+    loadProfileSettings()
   }
 
   return (
@@ -688,34 +761,41 @@ function App() {
         <div className="crown-rim crown-rim-left" aria-hidden="true" />
         <div className="crown-rim crown-rim-right" aria-hidden="true" />
 
-        <section className="banner-panel">
-          <div className="banner-actions">
-            {screen === 'gallery' && !sessionState.authenticated && (
-              <button type="button" className="nav-pill nav-pill-compact" onClick={() => setScreen('login')}>
-                Login
-              </button>
-            )}
-            {screen === 'gallery' && sessionState.authenticated && (
-              <button type="button" className="nav-pill nav-pill-compact" onClick={handleLogout}>
-                Logout
-              </button>
-            )}
-          </div>
-          <div className="banner-ornament" aria-hidden="true">
-            <div className="frost-crown">
-              <span className="frost-crown-spike spike-a" />
-              <span className="frost-crown-spike spike-b" />
-              <span className="frost-crown-spike spike-c" />
-              <span className="frost-crown-spike spike-d" />
-              <div className="frost-core" />
+        {screen !== 'login' && screen !== 'register' ? (
+          <section className="banner-panel">
+            <div className="banner-actions">
+              {screen === 'gallery' && sessionState.authenticated && (
+                <button type="button" className="nav-pill nav-pill-compact" onClick={openProfile}>
+                  Profile
+                </button>
+              )}
+              {screen !== 'gallery' && sessionState.authenticated && (
+                <button type="button" className="nav-pill nav-pill-compact" onClick={() => setScreen('gallery')}>
+                  Gallery
+                </button>
+              )}
+              {sessionState.authenticated && (
+                <button type="button" className="nav-pill nav-pill-compact" onClick={handleLogout}>
+                  Logout
+                </button>
+              )}
             </div>
-          </div>
+            <div className="banner-ornament" aria-hidden="true">
+              <div className="frost-crown">
+                <span className="frost-crown-spike spike-a" />
+                <span className="frost-crown-spike spike-b" />
+                <span className="frost-crown-spike spike-c" />
+                <span className="frost-crown-spike spike-d" />
+                <div className="frost-core" />
+              </div>
+            </div>
 
-          <div className="banner-copy">
-            <p className="overline">Nudes Protector</p>
-            <h1>Gate of the Citadel</h1>
-          </div>
-        </section>
+            <div className="banner-copy">
+              <p className="overline">Nudes Protector</p>
+              <h1>Gate of the Citadel</h1>
+            </div>
+          </section>
+        ) : null}
 
         <section className="screen-shell">
           {screen === 'gallery' && (
@@ -747,53 +827,69 @@ function App() {
                   </div>
                 ))}
               </div>
+            </article>
+          )}
 
+          {screen === 'profile' && sessionState.authenticated && (
+            <article className="command-panel">
+              <div className="frame-ribs" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
               <div className="vault-shell">
                 <div className="vault-heading">
                   <div>
-                    <p className="panel-label">Passkey vault</p>
-                    <h3>Manage linked passkeys</h3>
+                    <p className="panel-label">Profile</p>
+                    <h2>Passkey vault</h2>
                   </div>
-                  <span className={`vault-badge ${sessionState.authenticated ? 'online' : ''}`}>
-                    {sessionState.loading ? 'Checking session' : sessionState.authenticated ? 'Authenticated' : 'Guest'}
-                  </span>
+                </div>
+
+                <div className="profile-settings">
+                  <label className="checkbox-row">
+                    <input
+                      type="checkbox"
+                      checked={profileState.mfaEnabled}
+                      onChange={handleProfileMfaToggle}
+                      disabled={profileState.loading}
+                    />
+                    <strong>Enable email MFA</strong>
+                  </label>
+                  {profileState.tone === 'error' && profileState.result && (
+                    <pre className={`result-box compact-result ${profileState.tone}`}>{profileState.result}</pre>
+                  )}
                 </div>
 
                 <div className="vault-actions">
-                  <button type="button" className="nav-pill" onClick={loadPasskeys} disabled={passkeyState.loading}>
-                    Refresh passkeys
-                  </button>
+                  <label className="passkey-name-field">
+                    <span>Passkey name</span>
+                    <input
+                      type="text"
+                      value={passkeyForm.label}
+                      onChange={(event) => setPasskeyForm({ label: event.target.value })}
+                      placeholder="iPhone, MacBook, Work laptop"
+                      maxLength="80"
+                    />
+                  </label>
                   <button
                     type="button"
                     className="nav-pill"
                     onClick={handlePasskeyRegistration}
-                    disabled={passkeyState.loading || !sessionState.authenticated}
+                    disabled={passkeyState.loading}
                   >
                     Add passkey
                   </button>
-                  {!sessionState.authenticated && (
-                    <button type="button" className="nav-pill" onClick={() => setScreen('login')}>
-                      Login first
-                    </button>
-                  )}
                 </div>
 
                 {passkeys.length === 0 ? (
-                  <div className="empty-vault">
-                    {sessionState.authenticated
-                      ? 'No passkeys registered yet.'
-                      : 'Login first to inspect or register passkeys.'}
-                  </div>
+                  <div className="empty-vault">No passkeys registered yet.</div>
                 ) : (
                   <div className="passkey-list">
-                    {passkeys.map((passkey) => (
+                    {passkeys.map((passkey, index) => (
                       <article key={passkey.id} className="passkey-card">
                         <div className="passkey-copy">
-                          <strong>{passkey.label || 'Unnamed passkey'}</strong>
-                          <span>ID: {passkey.id}</span>
+                          <strong>{formatPasskeyLabel(passkey, index)}</strong>
                           <span>Created: {formatDate(passkey.createdAt)}</span>
-                          <span>Last used: {formatDate(passkey.lastUsedAt)}</span>
-                          <span>Transports: {passkey.transports.length ? passkey.transports.join(', ') : 'n/a'}</span>
                         </div>
                         <button
                           type="button"
@@ -808,21 +904,31 @@ function App() {
                   </div>
                 )}
 
-                <pre className={`result-box compact-result ${passkeyState.tone}`}>{passkeyState.result}</pre>
+                {passkeyState.tone === 'error' && passkeyState.result && (
+                  <pre className={`result-box compact-result ${passkeyState.tone}`}>{passkeyState.result}</pre>
+                )}
               </div>
             </article>
           )}
 
           {screen === 'login' && (
-            <article className="command-panel single-panel">
+            <article className="command-panel single-panel auth-screen-panel">
               <div className="frame-ribs" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
+              <div className="login-citadel-mark login-citadel-mark-inline" aria-hidden="true">
+                <div className="frost-crown">
+                  <span className="frost-crown-spike spike-a" />
+                  <span className="frost-crown-spike spike-b" />
+                  <span className="frost-crown-spike spike-c" />
+                  <span className="frost-crown-spike spike-d" />
+                  <div className="frost-core" />
+                </div>
+              </div>
               <p className="panel-label">Main hall</p>
               <h2>Login</h2>
-              <p className="panel-text">Enter with your email and password, or use a registered passkey for passwordless entry.</p>
 
               <form className="auth-form" onSubmit={handleLoginSubmit}>
                 <label>
@@ -859,72 +965,29 @@ function App() {
                 </label>
 
                 <button type="submit" disabled={loginState.loading}>
-                  {loginState.loading ? 'Verifying...' : 'Enter the Hall'}
+                  Enter the Hall
                 </button>
+
+                <p className="mini-auth-label">Login with:</p>
+
+                <div className="auth-provider-row auth-provider-row-compact">
+                  <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('google')} disabled={loginState.loading}>
+                    Google
+                  </button>
+                  <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('github')} disabled={loginState.loading}>
+                    GitHub
+                  </button>
+                </div>
+
+                <div className="auth-provider-row auth-provider-row-compact">
+                  <button type="button" className="nav-pill" onClick={() => setScreen('ott-request')} disabled={loginState.loading}>
+                    Email
+                  </button>
+                  <button type="button" className="nav-pill" onClick={handlePasskeyLogin} disabled={loginState.loading}>
+                    {loginState.loading ? 'Waiting...' : 'Passkey'}
+                  </button>
+                </div>
               </form>
-
-              <div className="divider-line">
-                <span>or</span>
-              </div>
-
-              <button type="button" className="secondary-action" onClick={handlePasskeyLogin} disabled={loginState.loading}>
-                {loginState.loading ? 'Awaiting ceremony...' : 'Enter with Passkey'}
-              </button>
-
-              <div className="divider-line">
-                <span>oauth2</span>
-              </div>
-
-              <div className="panel-actions auth-provider-actions">
-                <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('google')} disabled={loginState.loading}>
-                  Continue with Google
-                </button>
-                <button type="button" className="nav-pill" onClick={() => handleOAuthLogin('github')} disabled={loginState.loading}>
-                  Continue with GitHub
-                </button>
-              </div>
-
-              <div className="divider-line">
-                <span>one-time token</span>
-              </div>
-
-              <form className="auth-form" onSubmit={handleOttRequestSubmit}>
-                <label>
-                  <span>Email for OTT</span>
-                  <input
-                    type="email"
-                    value={ottRequestForm.email}
-                    onChange={(event) => setOttRequestForm({ email: event.target.value })}
-                    placeholder="warden@citadel.com"
-                    required
-                  />
-                </label>
-
-                <button type="submit" disabled={ottRequestState.loading}>
-                  {ottRequestState.loading ? 'Sending token...' : 'Send one-time token'}
-                </button>
-              </form>
-
-              <pre className={`result-box compact-result ${ottRequestState.tone}`}>{ottRequestState.result}</pre>
-
-              <form className="auth-form" onSubmit={handleOttSubmit}>
-                <label>
-                  <span>OTT token</span>
-                  <input
-                    type="text"
-                    value={ottForm.token}
-                    onChange={(event) => setOttForm({ token: event.target.value.trim() })}
-                    placeholder="Paste one-time token"
-                    required
-                  />
-                </label>
-
-                <button type="submit" disabled={ottState.loading}>
-                  {ottState.loading ? 'Checking token...' : 'Login with one-time token'}
-                </button>
-              </form>
-
-              <pre className={`result-box compact-result ${ottState.tone}`}>{ottState.result}</pre>
 
               <div className="panel-actions">
                 <button type="button" className="link-button" onClick={() => setScreen('register')}>
@@ -935,7 +998,95 @@ function App() {
                 </button>
               </div>
 
-              <pre className={`result-box ${loginState.tone}`}>{loginState.result}</pre>
+              {loginState.tone === 'error' && loginState.result && (
+                <pre className={`result-box ${loginState.tone}`}>{loginState.result}</pre>
+              )}
+            </article>
+          )}
+
+          {screen === 'ott-request' && (
+            <article className="command-panel single-panel auth-screen-panel">
+              <div className="frame-ribs" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className="panel-label">One-time token</p>
+              <h2>Login by Email</h2>
+              <p className="panel-text">Enter your email address. We will send a one-time login token to it.</p>
+
+              <form className="auth-form" onSubmit={handleOttRequestSubmit}>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={ottRequestForm.email}
+                    onChange={(event) => setOttRequestForm({ email: event.target.value })}
+                    placeholder="warden@citadel.com"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={ottRequestState.loading}>
+                  Send one-time token
+                </button>
+              </form>
+
+              <div className="panel-actions">
+                <button type="button" className="link-button" onClick={() => setScreen('login')}>
+                  Back to login
+                </button>
+                <button type="button" className="link-button" onClick={() => setScreen('gallery')}>
+                  Back to gallery
+                </button>
+              </div>
+
+              {ottRequestState.tone === 'error' && ottRequestState.result && (
+                <pre className={`result-box ${ottRequestState.tone}`}>{ottRequestState.result}</pre>
+              )}
+            </article>
+          )}
+
+          {screen === 'ott-verify' && (
+            <article className="command-panel single-panel command-panel-accent">
+              <div className="frame-ribs" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <p className="panel-label">One-time token</p>
+              <h2>Enter token</h2>
+              <p className="panel-text">Paste the one-time token from the email to complete sign-in.</p>
+
+              <form className="auth-form" onSubmit={handleOttSubmit}>
+                <label>
+                  <span>One-time token</span>
+                  <input
+                    type="text"
+                    value={ottForm.token}
+                    onChange={(event) => setOttForm({ token: event.target.value.trim() })}
+                    placeholder="Paste token"
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={ottState.loading}>
+                  Login with one-time token
+                </button>
+              </form>
+
+              <div className="panel-actions">
+                <button type="button" className="link-button" onClick={() => setScreen('ott-request')}>
+                  Back to email
+                </button>
+                <button type="button" className="link-button" onClick={() => setScreen('login')}>
+                  Back to login
+                </button>
+              </div>
+
+              {ottState.tone === 'error' && ottState.result && (
+                <pre className={`result-box ${ottState.tone}`}>{ottState.result}</pre>
+              )}
             </article>
           )}
 
@@ -977,7 +1128,7 @@ function App() {
                 </label>
 
                 <button type="submit" disabled={mfaState.loading}>
-                  {mfaState.loading ? 'Confirming...' : 'Complete Login'}
+                  Complete Login
                 </button>
               </form>
 
@@ -990,20 +1141,30 @@ function App() {
                 </button>
               </div>
 
-              <pre className={`result-box ${mfaState.tone}`}>{mfaState.result}</pre>
+              {mfaState.tone === 'error' && mfaState.result && (
+                <pre className={`result-box ${mfaState.tone}`}>{mfaState.result}</pre>
+              )}
             </article>
           )}
 
           {screen === 'register' && (
-            <article className="command-panel single-panel">
+            <article className="command-panel single-panel auth-screen-panel">
               <div className="frame-ribs" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </div>
-              <p className="panel-label">Create account</p>
+              <div className="login-citadel-mark login-citadel-mark-inline" aria-hidden="true">
+                <div className="frost-crown">
+                  <span className="frost-crown-spike spike-a" />
+                  <span className="frost-crown-spike spike-b" />
+                  <span className="frost-crown-spike spike-c" />
+                  <span className="frost-crown-spike spike-d" />
+                  <div className="frost-core" />
+                </div>
+              </div>
+              <p className="panel-label">Main hall</p>
               <h2>Register</h2>
-              <p className="panel-text">Create the account first. After success, the next screen will ask for the verification code.</p>
 
               <form className="auth-form" onSubmit={handleRegisterSubmit}>
                 <label>
@@ -1044,17 +1205,8 @@ function App() {
                   <p className="field-hint">Minimum 8 characters with letters, digits, and a special character.</p>
                 </label>
 
-                <label>
-                  <span>Enable email MFA</span>
-                  <input
-                    type="checkbox"
-                    checked={registerForm.mfaEnabled}
-                    onChange={(event) => setRegisterForm((current) => ({ ...current, mfaEnabled: event.target.checked }))}
-                  />
-                </label>
-
                 <button type="submit" disabled={registerState.loading}>
-                  {registerState.loading ? 'Binding...' : 'Seal the Account'}
+                  Register Account
                 </button>
               </form>
 
@@ -1067,7 +1219,9 @@ function App() {
                 </button>
               </div>
 
-              <pre className={`result-box ${registerState.tone}`}>{registerState.result}</pre>
+              {registerState.tone === 'error' && registerState.result && (
+                <pre className={`result-box ${registerState.tone}`}>{registerState.result}</pre>
+              )}
             </article>
           )}
 
@@ -1109,7 +1263,7 @@ function App() {
                 </label>
 
                 <button type="submit" disabled={verificationState.loading}>
-                  {verificationState.loading ? 'Confirming...' : 'Verify Email'}
+                  Verify Email
                 </button>
               </form>
 
@@ -1124,7 +1278,9 @@ function App() {
                   Back to gallery
                 </button>
               </div>
-              <pre className={`result-box ${verificationState.tone}`}>{verificationState.result}</pre>
+              {verificationState.tone === 'error' && verificationState.result && (
+                <pre className={`result-box ${verificationState.tone}`}>{verificationState.result}</pre>
+              )}
             </article>
           )}
         </section>
@@ -1173,11 +1329,7 @@ function getInitialLoginState() {
   const logout = query.get('logout')
 
   if (logout === 'true') {
-    return {
-      loading: false,
-      result: 'Session closed.',
-      tone: 'success',
-    }
+    return { loading: false, result: '', tone: '' }
   }
 
   if (error === 'bad_credentials') {
@@ -1212,7 +1364,7 @@ function getInitialLoginState() {
     }
   }
 
-  return { loading: false, result: 'Awaiting your command...', tone: '' }
+  return { loading: false, result: '', tone: '' }
 }
 
 function resolveInitialScreen(currentQuery) {
@@ -1348,13 +1500,23 @@ function bufferToBase64Url(value) {
   return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
-function buildPasskeyLabel() {
-  const date = new Date().toLocaleString()
-  return `Passkey ${date}`
+function buildPasskeyLabel(value) {
+  const normalized = (value || '').trim()
+  return normalized || 'Passkey'
 }
 
 function formatDate(value) {
   return new Date(value).toLocaleString()
+}
+
+function formatPasskeyLabel(passkey, index) {
+  const label = (passkey.label || '').trim()
+
+  if (!label || label.toLowerCase() === 'passkey' || label.startsWith('Passkey ')) {
+    return `Passkey ${index + 1}`
+  }
+
+  return label
 }
 
 export default App
