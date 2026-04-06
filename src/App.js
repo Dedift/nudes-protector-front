@@ -37,6 +37,12 @@ const initialPasskeyForm = {
   label: '',
 }
 
+const initialPasswordForm = {
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+}
+
 const query = new URLSearchParams(window.location.search)
 const initialScreen = resolveInitialScreen(query)
 
@@ -56,8 +62,12 @@ function App() {
   const [passkeyState, setPasskeyState] = useState({ loading: false, result: '', tone: '' })
   const [passkeys, setPasskeys] = useState([])
   const [passkeyForm, setPasskeyForm] = useState(initialPasskeyForm)
+  const [oauth2Accounts, setOauth2Accounts] = useState([])
+  const [oauth2State, setOauth2State] = useState({ loading: false, result: '', tone: '' })
+  const [passwordForm, setPasswordForm] = useState(initialPasswordForm)
   const [csrfState, setCsrfState] = useState({ headerName: '', parameterName: '', token: '' })
   const [profileState, setProfileState] = useState({ loading: false, mfaEnabled: false, result: '', tone: '' })
+  const [passwordState, setPasswordState] = useState({ loading: false, result: '', tone: '' })
 
   useEffect(() => {
     bootstrap()
@@ -66,6 +76,12 @@ function App() {
   useEffect(() => {
     syncScreenQuery(screen)
   }, [screen])
+
+  useEffect(() => {
+    if (!sessionState.loading && !sessionState.authenticated && (screen === 'profile' || screen === 'change-password')) {
+      setScreen('login')
+    }
+  }, [screen, sessionState.authenticated, sessionState.loading])
 
   async function submit(path, payload, setter, onSuccess) {
     setter({ loading: true, result: '', tone: '' })
@@ -622,6 +638,33 @@ function App() {
     }
   }
 
+  async function loadOauth2Accounts() {
+    setOauth2State({ loading: true, result: '', tone: '' })
+
+    try {
+      const response = await apiFetch('/users/me/oauth2-accounts')
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setOauth2State({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      setOauth2Accounts(Array.isArray(body) ? body : [])
+      setOauth2State({ loading: false, result: '', tone: '' })
+    } catch (error) {
+      setOauth2State({
+        loading: false,
+        result: error instanceof Error ? error.message : 'Failed to load linked accounts.',
+        tone: 'error',
+      })
+    }
+  }
+
   async function handleProfileMfaToggle(event) {
     const enabled = event.target.checked
     setProfileState((current) => ({ ...current, loading: true, mfaEnabled: enabled, result: '', tone: '' }))
@@ -666,6 +709,89 @@ function App() {
     }
   }
 
+  async function handlePasswordUpdateSubmit(event) {
+    event.preventDefault()
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordState({
+        loading: false,
+        result: 'New passwords do not match.',
+        tone: 'error',
+      })
+      return
+    }
+
+    setPasswordState({ loading: true, result: '', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch('/users/me/password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...csrfHeaders(csrf),
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      })
+      const body = await readResponseBody(response)
+
+      if (!response.ok) {
+        setPasswordState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      setPasswordForm(initialPasswordForm)
+      setPasswordState({
+        loading: false,
+        result: 'Password updated successfully.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setPasswordState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'Password update failed.',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function handleOauth2Unlink(provider) {
+    setOauth2State({ loading: true, result: '', tone: '' })
+
+    try {
+      const csrf = await ensureCsrfToken()
+      const response = await apiFetch(`/users/me/oauth2-accounts/${encodeURIComponent(provider)}`, {
+        method: 'DELETE',
+        headers: csrfHeaders(csrf),
+      })
+
+      if (!response.ok) {
+        const body = await readResponseBody(response)
+        setOauth2State({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        return
+      }
+
+      await loadOauth2Accounts()
+    } catch (error) {
+      setOauth2State({
+        loading: false,
+        result: error instanceof Error ? error.message : 'Failed to unlink account.',
+        tone: 'error',
+      })
+    }
+  }
+
   async function handleLogout() {
     setPasskeyState({ loading: true, result: '', tone: '' })
 
@@ -699,8 +825,15 @@ function App() {
 
   function openProfile() {
     setScreen('profile')
+    setPasswordState({ loading: false, result: '', tone: '' })
     loadPasskeys()
     loadProfileSettings()
+    loadOauth2Accounts()
+  }
+
+  function openChangePassword() {
+    setPasswordState({ loading: false, result: '', tone: '' })
+    setScreen('change-password')
   }
 
   return (
@@ -711,7 +844,7 @@ function App() {
         <div className="crown-rim crown-rim-left" aria-hidden="true" />
         <div className="crown-rim crown-rim-right" aria-hidden="true" />
 
-        {screen !== 'login' && screen !== 'register' ? (
+        {screen !== 'login' && screen !== 'register' && screen !== 'change-password' ? (
           <section className="banner-panel">
             <div className="banner-actions">
               {screen === 'gallery' && sessionState.authenticated && (
@@ -809,6 +942,59 @@ function App() {
                     <pre className={`result-box compact-result ${profileState.tone}`}>{profileState.result}</pre>
                   )}
                 </div>
+
+                <section className="profile-section">
+                  <div className="vault-heading vault-heading-compact">
+                    <div>
+                      <p className="panel-label">Security</p>
+                      <h3>Change password</h3>
+                    </div>
+                  </div>
+
+                  <p className="panel-text">Open a dedicated page to verify your current password and set a new one.</p>
+
+                  <div className="panel-actions">
+                    <button type="button" className="nav-pill" onClick={openChangePassword}>
+                      Change password
+                    </button>
+                  </div>
+                </section>
+
+                <section className="profile-section">
+                  <div className="vault-heading vault-heading-compact">
+                    <div>
+                      <p className="panel-label">Linked accounts</p>
+                      <h3>OAuth2</h3>
+                    </div>
+                  </div>
+
+                  {oauth2Accounts.length === 0 ? (
+                    <div className="empty-vault">No linked Google or GitHub accounts yet.</div>
+                  ) : (
+                    <div className="oauth2-account-list">
+                      {oauth2Accounts.map((account) => (
+                        <article key={account.provider} className="passkey-card">
+                          <div className="passkey-copy">
+                            <strong>{formatOauth2Provider(account.provider)}</strong>
+                            <span>Linked: {formatDate(account.createdAt)}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="link-button danger-link"
+                            onClick={() => handleOauth2Unlink(account.provider)}
+                            disabled={oauth2State.loading}
+                          >
+                            Unlink
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+
+                  {oauth2State.tone === 'error' && oauth2State.result && (
+                    <pre className={`result-box compact-result ${oauth2State.tone}`}>{oauth2State.result}</pre>
+                  )}
+                </section>
 
                 <div className="vault-actions">
                   <label className="passkey-name-field">
@@ -1154,6 +1340,85 @@ function App() {
             </article>
           )}
 
+          {screen === 'change-password' && sessionState.authenticated && (
+            <article className="command-panel single-panel auth-screen-panel">
+              <div className="frame-ribs" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="login-citadel-mark login-citadel-mark-inline" aria-hidden="true">
+                <div className="frost-crown">
+                  <span className="frost-crown-spike spike-a" />
+                  <span className="frost-crown-spike spike-b" />
+                  <span className="frost-crown-spike spike-c" />
+                  <span className="frost-crown-spike spike-d" />
+                  <div className="frost-core" />
+                </div>
+              </div>
+              <p className="panel-label">Security</p>
+              <h2>Change Password</h2>
+              <p className="panel-text">Confirm your current password, then set a new one using the same rules as registration.</p>
+
+              <form className="auth-form" onSubmit={handlePasswordUpdateSubmit}>
+                <label>
+                  <span>Current password</span>
+                  <input
+                    type="password"
+                    value={passwordForm.currentPassword}
+                    onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                    placeholder="Current password"
+                    required
+                  />
+                </label>
+
+                <label>
+                  <span>New password</span>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))}
+                    placeholder="StrongPass123!"
+                    minLength="8"
+                    pattern={passwordPattern.source}
+                    required
+                  />
+                  <p className="field-hint">Minimum 8 characters with letters, digits, and a special character.</p>
+                </label>
+
+                <label>
+                  <span>Confirm new password</span>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                    placeholder="Repeat new password"
+                    minLength="8"
+                    pattern={passwordPattern.source}
+                    required
+                  />
+                </label>
+
+                <button type="submit" disabled={passwordState.loading}>
+                  Change password
+                </button>
+              </form>
+
+              <div className="panel-actions">
+                <button type="button" className="link-button" onClick={openProfile}>
+                  Back to profile
+                </button>
+                <button type="button" className="link-button" onClick={() => setScreen('gallery')}>
+                  Back to gallery
+                </button>
+              </div>
+
+              {passwordState.result && passwordState.tone && (
+                <pre className={`result-box ${passwordState.tone}`}>{passwordState.result}</pre>
+              )}
+            </article>
+          )}
+
           {screen === 'verify' && (
             <article className="command-panel single-panel command-panel-accent">
               <div className="frame-ribs" aria-hidden="true">
@@ -1297,11 +1562,24 @@ function getInitialLoginState() {
 }
 
 function resolveInitialScreen(currentQuery) {
+  const supportedScreens = new Set([
+    'gallery',
+    'profile',
+    'change-password',
+    'login',
+    'ott-request',
+    'ott-wait',
+    'mfa',
+    'register',
+    'verify',
+  ])
+
   if (currentQuery.get('error') || currentQuery.get('logout')) {
     return 'gallery'
   }
 
-  return currentQuery.get('screen') || 'gallery'
+  const requestedScreen = currentQuery.get('screen')
+  return supportedScreens.has(requestedScreen) ? requestedScreen : 'gallery'
 }
 
 function syncScreenQuery(screen) {
@@ -1446,6 +1724,20 @@ function formatPasskeyLabel(passkey, index) {
   }
 
   return label
+}
+
+function formatOauth2Provider(provider) {
+  const normalizedProvider = (provider || '').trim().toLowerCase()
+
+  if (normalizedProvider === 'google') {
+    return 'Google'
+  }
+
+  if (normalizedProvider === 'github') {
+    return 'GitHub'
+  }
+
+  return provider
 }
 
 export default App

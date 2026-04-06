@@ -676,14 +676,6 @@
   box-shadow: inset 0 0 0 1px rgba(31, 40, 55, 0.72);
 }
 
-.compact-auth-form {
-  gap: 12px;
-}
-
-.compact-auth-form button {
-  margin-top: 0;
-}
-
 @media (max-width: 640px) {
   .auth-provider-row {
     grid-template-columns: 1fr;
@@ -781,6 +773,30 @@
   display: grid;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.profile-section {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding: 18px;
+  border: 1px solid rgba(98, 141, 172, 0.32);
+  background: rgba(8, 12, 18, 0.72);
+}
+
+.vault-heading-compact {
+  margin-bottom: 0;
+}
+
+.vault-heading-compact h3 {
+  margin: 0;
+  color: #eef9ff;
+  font-size: 1.05rem;
+}
+
+.oauth2-account-list {
+  display: grid;
+  gap: 14px;
 }
 
 .passkey-list {
