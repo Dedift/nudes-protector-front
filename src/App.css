@@ -515,6 +515,14 @@
   filter: blur(8px) saturate(0.8);
 }
 
+.gallery-thumb-image {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: #09111c;
+  filter: none;
+}
+
 .gallery-meta {
   display: grid;
   gap: 6px;

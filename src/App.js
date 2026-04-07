@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const defaultApiBaseUrl = window.location.origin === 'http://localhost:3000'
@@ -43,6 +43,19 @@ const initialPasswordForm = {
   confirmPassword: '',
 }
 
+const placeholderGalleryItems = Array.from({ length: 10 }, (_, index) => ({
+  id: `placeholder-${index + 1}`,
+  title: `Vault Frame ${index + 1}`,
+  imageUrl: '',
+}))
+
+function buildGallerySlots(items) {
+  return placeholderGalleryItems.map((placeholder, index) => ({
+    ...placeholder,
+    ...(items[index] || {}),
+  }))
+}
+
 const query = new URLSearchParams(window.location.search)
 const initialScreen = resolveInitialScreen(query)
 
@@ -68,6 +81,9 @@ function App() {
   const [csrfState, setCsrfState] = useState({ headerName: '', parameterName: '', token: '' })
   const [profileState, setProfileState] = useState({ loading: false, mfaEnabled: false, result: '', tone: '' })
   const [passwordState, setPasswordState] = useState({ loading: false, result: '', tone: '' })
+  const [galleryItems, setGalleryItems] = useState(() => buildGallerySlots([]))
+  const [galleryState, setGalleryState] = useState({ loading: false, result: '', tone: '' })
+  const galleryRequestRef = useRef(0)
 
   useEffect(() => {
     bootstrap()
@@ -80,6 +96,12 @@ function App() {
   useEffect(() => {
     if (!sessionState.loading && !sessionState.authenticated && (screen === 'profile' || screen === 'change-password')) {
       setScreen('login')
+    }
+  }, [screen, sessionState.authenticated, sessionState.loading])
+
+  useEffect(() => {
+    if (!sessionState.loading && screen === 'gallery') {
+      loadGalleryItems()
     }
   }, [screen, sessionState.authenticated, sessionState.loading])
 
@@ -221,6 +243,48 @@ function App() {
       setPasskeyState({
         loading: false,
         result: error instanceof Error ? error.message : 'Unexpected network error',
+        tone: 'error',
+      })
+    }
+  }
+
+  async function loadGalleryItems() {
+    const requestId = galleryRequestRef.current + 1
+    galleryRequestRef.current = requestId
+    setGalleryItems(buildGallerySlots([]))
+    setGalleryState({ loading: true, result: '', tone: '' })
+
+    try {
+      const response = await apiFetch('/api/images')
+      const body = await readResponseBody(response)
+
+      if (galleryRequestRef.current !== requestId) {
+        return
+      }
+
+      if (!response.ok) {
+        setGalleryState({
+          loading: false,
+          result: formatResult(body, response.status),
+          tone: 'error',
+        })
+        if (response.status === 401 || response.status === 403) {
+          setSessionState({ loading: false, authenticated: false })
+        }
+        return
+      }
+
+      const items = Array.isArray(body) ? body.slice(0, 10) : []
+
+      setGalleryItems(buildGallerySlots(items))
+      setGalleryState({ loading: false, result: '', tone: '' })
+    } catch (error) {
+      if (galleryRequestRef.current !== requestId) {
+        return
+      }
+      setGalleryState({
+        loading: false,
+        result: error instanceof Error ? error.message : 'Failed to load gallery.',
         tone: 'error',
       })
     }
@@ -900,16 +964,29 @@ function App() {
                 )}
               </div>
               <div className="gallery-grid" aria-label="Gallery preview">
-                {Array.from({ length: 10 }, (_, index) => (
-                  <div key={index} className="gallery-card">
-                    <div className="gallery-thumb" />
+                {galleryItems.map((item, index) => (
+                  <div key={item.id} className="gallery-card">
+                    {item.imageUrl ? (
+                      <img
+                        className="gallery-thumb gallery-thumb-image"
+                        src={toApiUrl(item.imageUrl)}
+                        alt={item.title}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="gallery-thumb" />
+                    )}
                     <div className="gallery-meta">
-                      <strong>Vault Frame {index + 1}</strong>
+                      <strong>{item.title || `Vault Frame ${index + 1}`}</strong>
                       <span>{sessionState.authenticated ? 'Unlocked preview' : 'Blurred preview'}</span>
                     </div>
                   </div>
                 ))}
               </div>
+
+              {galleryState.tone === 'error' && galleryState.result && (
+                <pre className={`result-box compact-result ${galleryState.tone}`}>{galleryState.result}</pre>
+              )}
             </article>
           )}
 
