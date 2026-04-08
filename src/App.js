@@ -1255,7 +1255,7 @@ function App() {
                     Email
                   </button>
                   <button type="button" className="nav-pill" onClick={handlePasskeyLogin} disabled={loginState.loading}>
-                    {loginState.loading ? 'Waiting...' : 'Passkey'}
+                    Passkey
                   </button>
                 </div>
               </form>
