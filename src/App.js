@@ -79,7 +79,15 @@ function App() {
   const [oauth2State, setOauth2State] = useState({ loading: false, result: '', tone: '' })
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm)
   const [csrfState, setCsrfState] = useState({ headerName: '', parameterName: '', token: '' })
-  const [profileState, setProfileState] = useState({ loading: false, mfaEnabled: false, result: '', tone: '' })
+  const [profileState, setProfileState] = useState({
+    loading: false,
+    username: '',
+    email: '',
+    createdAt: '',
+    mfaEnabled: false,
+    result: '',
+    tone: '',
+  })
   const [passwordState, setPasswordState] = useState({ loading: false, result: '', tone: '' })
   const [galleryItems, setGalleryItems] = useState(() => buildGallerySlots([]))
   const [galleryState, setGalleryState] = useState({ loading: false, result: '', tone: '' })
@@ -693,6 +701,9 @@ function App() {
         setSessionState({ loading: false, authenticated: false })
         setProfileState({
           loading: false,
+          username: '',
+          email: '',
+          createdAt: '',
           mfaEnabled: false,
           result: '',
           tone: '',
@@ -704,6 +715,9 @@ function App() {
       if (!response.ok) {
         setProfileState({
           loading: false,
+          username: '',
+          email: '',
+          createdAt: '',
           mfaEnabled: false,
           result: formatResult(body, response.status),
           tone: 'error',
@@ -713,6 +727,9 @@ function App() {
 
       setProfileState({
         loading: false,
+        username: body?.username || '',
+        email: body?.email || '',
+        createdAt: body?.createdAt || '',
         mfaEnabled: Boolean(body?.mfaEnabled),
         result: '',
         tone: '',
@@ -720,6 +737,9 @@ function App() {
     } catch (error) {
       setProfileState({
         loading: false,
+        username: '',
+        email: '',
+        createdAt: '',
         mfaEnabled: false,
         result: error instanceof Error ? error.message : 'Failed to load profile settings.',
         tone: 'error',
@@ -1030,6 +1050,20 @@ function App() {
                 </div>
 
                 <div className="profile-settings">
+                  <section className="profile-summary">
+                    <div className="profile-summary-item">
+                      <span>Username</span>
+                      <strong>{profileState.username || 'Not available'}</strong>
+                    </div>
+                    <div className="profile-summary-item">
+                      <span>Email</span>
+                      <strong>{profileState.email || 'Not available'}</strong>
+                    </div>
+                    <div className="profile-summary-item">
+                      <span>Registered</span>
+                      <strong>{profileState.createdAt ? formatDate(profileState.createdAt) : 'Not available'}</strong>
+                    </div>
+                  </section>
                   <label className="checkbox-row">
                     <input
                       type="checkbox"

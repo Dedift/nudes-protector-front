@@ -615,6 +615,35 @@
   text-transform: uppercase;
 }
 
+.profile-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.profile-summary-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(98, 141, 172, 0.32);
+  background: rgba(10, 15, 24, 0.74);
+  box-shadow: inset 0 0 0 1px rgba(31, 40, 55, 0.72);
+}
+
+.profile-summary-item span {
+  color: #88bde3;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.profile-summary-item strong {
+  color: #eef9ff;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
 .auth-provider-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
