@@ -83,6 +83,7 @@ function App() {
   const [passwordState, setPasswordState] = useState({ loading: false, result: '', tone: '' })
   const [galleryItems, setGalleryItems] = useState(() => buildGallerySlots([]))
   const [galleryState, setGalleryState] = useState({ loading: false, result: '', tone: '' })
+  const [galleryCacheKey, setGalleryCacheKey] = useState(() => Date.now())
   const galleryRequestRef = useRef(0)
 
   useEffect(() => {
@@ -191,6 +192,12 @@ function App() {
 
     try {
       const response = await apiFetch('/users/me/passkeys')
+      if (isAuthenticationRedirect(response)) {
+        setPasskeys([])
+        setCsrfState({ headerName: '', parameterName: '', token: '' })
+        setSessionState({ loading: false, authenticated: false })
+        return false
+      }
 
       if (response.ok) {
         const body = await readResponseBody(response)
@@ -218,6 +225,12 @@ function App() {
 
     try {
       const response = await apiFetch('/users/me/passkeys')
+      if (isAuthenticationRedirect(response)) {
+        setPasskeys([])
+        setSessionState({ loading: false, authenticated: false })
+        setPasskeyState({ loading: false, result: '', tone: '' })
+        return
+      }
       const body = await readResponseBody(response)
 
       if (!response.ok) {
@@ -251,6 +264,8 @@ function App() {
   async function loadGalleryItems() {
     const requestId = galleryRequestRef.current + 1
     galleryRequestRef.current = requestId
+    const cacheKey = Date.now()
+    setGalleryCacheKey(cacheKey)
     setGalleryItems(buildGallerySlots([]))
     setGalleryState({ loading: true, result: '', tone: '' })
 
@@ -674,6 +689,16 @@ function App() {
 
     try {
       const response = await apiFetch('/users/me/settings')
+      if (isAuthenticationRedirect(response)) {
+        setSessionState({ loading: false, authenticated: false })
+        setProfileState({
+          loading: false,
+          mfaEnabled: false,
+          result: '',
+          tone: '',
+        })
+        return
+      }
       const body = await readResponseBody(response)
 
       if (!response.ok) {
@@ -707,6 +732,12 @@ function App() {
 
     try {
       const response = await apiFetch('/users/me/oauth2-accounts')
+      if (isAuthenticationRedirect(response)) {
+        setSessionState({ loading: false, authenticated: false })
+        setOauth2Accounts([])
+        setOauth2State({ loading: false, result: '', tone: '' })
+        return
+      }
       const body = await readResponseBody(response)
 
       if (!response.ok) {
@@ -871,11 +902,7 @@ function App() {
     } catch (_) {
       // Backend logout can invalidate the session before the client refreshes its CSRF token.
     } finally {
-      try {
-        await fetchCsrfToken()
-      } catch (_) {
-        setCsrfState({ headerName: '', parameterName: '', token: '' })
-      }
+      setCsrfState({ headerName: '', parameterName: '', token: '' })
       setPasskeys([])
       setSessionState({ loading: false, authenticated: false })
       setScreen('gallery')
@@ -964,22 +991,19 @@ function App() {
                 )}
               </div>
               <div className="gallery-grid" aria-label="Gallery preview">
-                {galleryItems.map((item, index) => (
+                {galleryItems.map((item) => (
                   <div key={item.id} className="gallery-card">
                     {item.imageUrl ? (
                       <img
                         className="gallery-thumb gallery-thumb-image"
-                        src={toApiUrl(item.imageUrl)}
+                        src={withCacheKey(toApiUrl(item.imageUrl), galleryCacheKey)}
+                        crossOrigin="use-credentials"
                         alt={item.title}
                         loading="lazy"
                       />
                     ) : (
                       <div className="gallery-thumb" />
                     )}
-                    <div className="gallery-meta">
-                      <strong>{item.title || `Vault Frame ${index + 1}`}</strong>
-                      <span>{sessionState.authenticated ? 'Unlocked preview' : 'Blurred preview'}</span>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -1683,12 +1707,30 @@ function apiFetch(path, init = {}) {
   })
 }
 
+function isAuthenticationRedirect(response) {
+  if (!response.redirected) {
+    return false
+  }
+
+  try {
+    const url = new URL(response.url)
+    return url.pathname === '/login'
+  } catch (_) {
+    return false
+  }
+}
+
 function toApiUrl(path) {
   if (!apiBaseUrl) {
     return path
   }
 
   return `${apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+function withCacheKey(url, cacheKey) {
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}v=${cacheKey}`
 }
 
 function normalizeEmail(value) {
@@ -1818,3 +1860,4 @@ function formatOauth2Provider(provider) {
 }
 
 export default App
+

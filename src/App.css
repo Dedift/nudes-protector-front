@@ -507,7 +507,6 @@
 
 .gallery-thumb {
   aspect-ratio: 4 / 5;
-  margin-bottom: 12px;
   border: 1px solid rgba(117, 167, 199, 0.34);
   background:
     linear-gradient(135deg, rgba(142, 214, 255, 0.18), rgba(35, 64, 98, 0.48)),
@@ -521,23 +520,6 @@
   object-fit: cover;
   background: #09111c;
   filter: none;
-}
-
-.gallery-meta {
-  display: grid;
-  gap: 6px;
-}
-
-.gallery-meta strong {
-  color: #eef9ff;
-  font-size: 0.96rem;
-}
-
-.gallery-meta span {
-  color: #8fb9d5;
-  font-size: 0.84rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .link-button {
@@ -867,3 +849,4 @@
     flex-direction: column;
   }
 }
+
