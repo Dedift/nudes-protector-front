@@ -114,6 +114,14 @@ function App() {
     }
   }, [screen, sessionState.authenticated, sessionState.loading])
 
+  useEffect(() => {
+    if (!sessionState.loading && sessionState.authenticated && screen === 'profile') {
+      loadPasskeys()
+      loadProfileSettings()
+      loadOauth2Accounts()
+    }
+  }, [screen, sessionState.authenticated, sessionState.loading])
+
   async function submit(path, payload, setter, onSuccess) {
     setter({ loading: true, result: '', tone: '' })
 
